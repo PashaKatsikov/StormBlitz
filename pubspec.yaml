@@ -45,6 +45,12 @@ flutter_launcher_icons:
   remove_alpha_ios: true
 
 flutter:
+  # Firebase is pulled in via CocoaPods (Podfile pins Firebase/Messaging for the
+  # NSE). With Flutter's default Swift Package Manager ALSO resolving Firebase,
+  # the build fails with "Redefinition of module 'Firebase'". Keep dependencies
+  # on CocoaPods only for this project.
+  config:
+    enable-swift-package-manager: false
   uses-material-design: true
   assets:
     - assets/
