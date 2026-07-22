@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/relay_log.dart';
 import '../../screens/home_shell_screen.dart';
 import '../../theme/app_theme.dart';
 import '../models/sky_route.dart';
@@ -62,7 +63,15 @@ class _BoltSplashState extends State<BoltSplash> {
   }
 
   Future<void> _boot() async {
-    final outcome = await _router.decide();
+    RelayOutcome outcome;
+    try {
+      outcome = await _router.decide();
+    } catch (e) {
+      // Never let a pipeline error crash the splash — fall back to the game
+      // (mirrors the template's BootScreen try/catch → NativeNest fallback).
+      relayLog(() => '[SB] boot pipeline failed: $e');
+      outcome = const RelayOutcome.game();
+    }
     if (!mounted) return;
     _ticker?.cancel();
     setState(() => _progress = 1.0);
@@ -157,7 +166,14 @@ class _BoltSplashState extends State<BoltSplash> {
               ),
               Align(
                 alignment: Alignment(0, isPortrait ? 0.66 : 0.82),
-                child: _bar(context, isPortrait),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _bar(context, isPortrait),
+                    const SizedBox(height: 14),
+                    const _LoadingLabel(),
+                  ],
+                ),
               ),
             ],
           );
@@ -209,6 +225,87 @@ class _BoltSplashState extends State<BoltSplash> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// "Loading" with three dots that animate in sequence, centered under the bar.
+class _LoadingLabel extends StatefulWidget {
+  const _LoadingLabel();
+
+  @override
+  State<_LoadingLabel> createState() => _LoadingLabelState();
+}
+
+class _LoadingLabelState extends State<_LoadingLabel>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, _) {
+        final phase = (_ctrl.value * 3).floor() % 3;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.32),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Loading',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                  letterSpacing: 0.6,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black45,
+                      blurRadius: 4,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 5),
+              for (int i = 0; i < 3; i++)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(
+                        alpha: i <= phase ? 1.0 : 0.3,
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

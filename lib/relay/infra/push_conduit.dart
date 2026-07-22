@@ -19,8 +19,30 @@ class PushConduit {
   /// refresh) — the coordinator re-POSTs the config with the token.
   void Function(String token)? onTokenReady;
 
-  /// Fires when a push is tapped while the app is alive/backgrounded.
-  void Function(String url)? onPushTapUrl;
+  /// Fires when a push is tapped while the app is alive/backgrounded. If no
+  /// handler is registered yet (e.g. the WebView is not mounted), the URL is
+  /// buffered and delivered as soon as a handler is set — otherwise the tapped
+  /// link would be silently dropped.
+  void Function(String url)? _onPushTapUrl;
+  String? _pendingTapUrl;
+
+  set onPushTapUrl(void Function(String url)? handler) {
+    _onPushTapUrl = handler;
+    final pending = _pendingTapUrl;
+    if (handler != null && pending != null) {
+      _pendingTapUrl = null;
+      handler(pending);
+    }
+  }
+
+  void _deliverTapUrl(String url) {
+    final handler = _onPushTapUrl;
+    if (handler != null) {
+      handler(url);
+    } else {
+      _pendingTapUrl = url; // drained when a handler is registered
+    }
+  }
 
   Future<void> bootstrap() async {
     try {
@@ -37,7 +59,7 @@ class PushConduit {
       });
       FirebaseMessaging.onMessageOpenedApp.listen((m) {
         final url = _extractUrl(m.data);
-        if (url != null) onPushTapUrl?.call(url);
+        if (url != null) _deliverTapUrl(url);
       });
       await _tryFetchToken();
     } catch (e) {
@@ -79,8 +101,10 @@ class PushConduit {
   }
 
   /// Requests the system permission dialog. Guarded against concurrent calls
-  /// (`permissions request already running`). After grant, the token can take
-  /// longer to arrive — use a longer poll.
+  /// (`permissions request already running`). Returns as soon as the user
+  /// answers the SYSTEM dialog — the APNs/FCM token poll runs in the BACKGROUND
+  /// so the push-invite screen can dismiss immediately (never block the UI on
+  /// the token; `onTokenReady` re-POSTs the config once it arrives).
   Future<bool> askPermission() async {
     if (_permissionInFlight) return false;
     _permissionInFlight = true;
@@ -88,7 +112,8 @@ class PushConduit {
       final s = await _fm.requestPermission(alert: true, badge: true, sound: true);
       final granted = _isGranted(s.authorizationStatus);
       if (granted) {
-        await _tryFetchToken(apnsTries: 14, apnsDelayMs: 700);
+        // Fire-and-forget: poll for the token off the UI path.
+        unawaited(_tryFetchToken(apnsTries: 14, apnsDelayMs: 700));
       }
       return granted;
     } catch (e) {

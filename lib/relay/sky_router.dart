@@ -17,7 +17,6 @@ class SkyRouter {
 
   final RelayServices _svc;
   Future<RelayOutcome>? _inflight;
-  bool _attRequested = false;
 
   Future<RelayOutcome> decide() =>
       _inflight ??= _run().whenComplete(() => _inflight = null);
@@ -44,8 +43,20 @@ class SkyRouter {
 
   // ── FRESH (first launch) ────────────────────────────────────────────
   Future<RelayOutcome> _handleFresh() async {
+    // 1. No transport at all → No-Signal immediately (fast, no DNS probe so we
+    //    never hang for seconds while offline). Mode stays fresh.
     if (await _svc.reach.isOffline()) {
-      return const RelayOutcome.offline(); // stays fresh — do not commit game
+      return const RelayOutcome.offline();
+    }
+    // 2. An interface exists, but confirm REAL internet reachability with a
+    //    DNS probe BEFORE the slow attribution/config pipeline. Without this a
+    //    "connected but no internet" state runs the whole pipeline (~25s) and
+    //    then falls through to the game — mis-routing an offline non-organic
+    //    user to the white part. Fresh must NEVER commit to game on a network
+    //    failure (template _firstDecision + gray_flow_lessons #3): show
+    //    No-Signal so Retry re-runs the full pipeline once the net is back.
+    if (!await _svc.reach.canReachNet()) {
+      return const RelayOutcome.offline();
     }
     await _svc.push.bootstrap();
     await _svc.signal.warmup();
@@ -60,13 +71,14 @@ class SkyRouter {
       return RelayOutcome.web(reply.destination!);
     }
     if (reply.reachedServer) {
-      // Genuine "no url" answer → commit the game path.
+      // Genuine "no url" answer from the backend → commit the game path.
       await _svc.store.writeMode(SkyRoute.game);
       return const RelayOutcome.game();
     }
-    // Online but transport failed → leave mode fresh (retry next launch),
-    // show the game for now without committing.
-    return const RelayOutcome.game();
+    // The probe passed a moment ago but the config server did not answer
+    // (transport failure) → treat as offline. Do NOT commit game; stay fresh
+    // so Retry runs the whole decision again.
+    return const RelayOutcome.offline();
   }
 
   // ── WEB (returning, was WebView) ────────────────────────────────────
@@ -169,20 +181,18 @@ class SkyRouter {
     }
   }
 
+  /// Reads the IDFA only. The ATT prompt itself is shown earlier, inside
+  /// `BeaconSignal.warmup()` (BEFORE AppsFlyer init) — never request it here,
+  /// or attribution stalls and the user is mis-routed to the game.
   Future<String?> _resolveIdfa() async {
     try {
-      if (!_attRequested) {
-        _attRequested = true;
-        await Future<void>.delayed(const Duration(milliseconds: 300));
-        await AppTrackingTransparency.requestTrackingAuthorization();
-      }
       final status =
           await AppTrackingTransparency.trackingAuthorizationStatus;
       if (status == TrackingStatus.authorized) {
         return AppTrackingTransparency.getAdvertisingIdentifier();
       }
     } catch (e) {
-      relayLog(() => '[SB] ATT/IDFA failed: $e');
+      relayLog(() => '[SB] IDFA read failed: $e');
     }
     return null;
   }

@@ -24,8 +24,34 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+	</dict>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>http</string>
+		<string>tel</string>
+		<string>mailto</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Storm Blitz uses the camera when you choose to capture a photo for your battle profile.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Storm Blitz lets you pick images from your library to customize your commander profile.</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>Allowing tracking helps us see which Storm Blitz campaigns bring new commanders into battle.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -66,24 +92,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-	</array>
-	<key>FirebaseAppDelegateProxyEnabled</key>
-	<true/>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>Your data is used to personalize your Storm Blitz experience and offers.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Storm Blitz uses the camera so you can share your best battles.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Storm Blitz needs photo access so you can add images to your profile.</string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoadsInWebContent</key>
-		<true/>
-	</dict>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 </dict>
 </plist>

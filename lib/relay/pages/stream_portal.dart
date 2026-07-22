@@ -35,6 +35,7 @@ class _StreamPortalState extends State<StreamPortal>
   bool _coldReloadDone = false;
   int _redirectRetries = 0;
   String? _lastMainFrameUrl;
+  Size? _lastMetricsSize;
 
   @override
   void initState() {
@@ -47,6 +48,15 @@ class _StreamPortalState extends State<StreamPortal>
       DeviceOrientation.landscapeRight,
     ]);
     _wv = _buildController();
+
+    // Warm/background push taps: load the pushed URL into this WebView. Any
+    // tap that arrived before this handler was registered is drained now.
+    widget.services.push.onPushTapUrl = (url) {
+      final uri = Uri.tryParse(url);
+      if (mounted && uri != null && uri.hasScheme) {
+        _wv.loadRequest(uri);
+      }
+    };
 
     if (widget.coldStartPush) {
       _settleColdViewport();
@@ -71,6 +81,7 @@ class _StreamPortalState extends State<StreamPortal>
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setUserAgent(widget.services.userAgent)
       ..setBackgroundColor(const Color(0xFF000000))
+      ..enableZoom(false)
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: _onNavigation,
@@ -78,6 +89,11 @@ class _StreamPortalState extends State<StreamPortal>
           onWebResourceError: _onError,
         ),
       );
+    // Enable the native iOS left-edge "swipe back" gesture inside the WebView.
+    if (c.platform is WebKitWebViewController) {
+      (c.platform as WebKitWebViewController)
+          .setAllowsBackForwardNavigationGestures(true);
+    }
     return c;
   }
 
@@ -94,26 +110,38 @@ class _StreamPortalState extends State<StreamPortal>
     await _wv.loadRequest(Uri.parse(widget.url));
   }
 
-  // Layer 1: rebuild when viewPadding changes; also poke a reflow on rotation.
+  // Layer 1: rebuild when viewPadding changes. Only poke a reflow on an ACTUAL
+  // orientation flip — NOT on every metrics change. Poking on the keyboard
+  // show/hide metrics change fired repeated resize/orientationchange events
+  // and made the content jitter up/down while typing.
   @override
   void didChangeMetrics() {
     if (!mounted) return;
     setState(() {});
-    _pokeReflow();
+    final size = View.of(context).physicalSize;
+    final rotated = _lastMetricsSize != null &&
+        ((_lastMetricsSize!.width < _lastMetricsSize!.height) !=
+            (size.width < size.height));
+    _lastMetricsSize = size;
+    if (rotated) _pokeReflow();
   }
 
   void _pokeReflow() {
+    _applyImmersive();
     const delays = [40, 160, 320, 560, 850];
     for (final ms in delays) {
       Future<void>.delayed(Duration(milliseconds: ms), () {
         if (!mounted) return;
+        // Re-lock viewport scale AND re-assert insets via the exposed helpers,
+        // otherwise the landscape scale factor sticks after returning to
+        // portrait (the guarded injectors are no-ops after first run).
         _wv.runJavaScript(
           "window.dispatchEvent(new Event('orientationchange'));"
           "window.dispatchEvent(new Event('resize'));"
-          "if(window.visualViewport){window.visualViewport.dispatchEvent(new Event('resize'));}",
+          "if(window.visualViewport){window.visualViewport.dispatchEvent(new Event('resize'));}"
+          "if(window.__sbLockViewport){window.__sbLockViewport();}"
+          "if(window.__sbApplyInset){window.__sbApplyInset();}",
         );
-        _injectInsetGuard();
-        _injectZoomLock();
       });
     }
   }
@@ -194,6 +222,11 @@ class _StreamPortalState extends State<StreamPortal>
       '--sat:0px!important;--sar:0px!important;--sab:0px!important;--sal:0px!important;'+
       '--safe-top:0px!important;--safe-bottom:0px!important;--safe-left:0px!important;--safe-right:0px!important;}'+
       '.app-header,.js-safe-top{padding-top:0!important;margin-top:0!important;}'+
+      // Disable iOS WebKit text auto-sizing: without this, rotating to
+      // landscape inflates the font and the enlarged scale sticks after
+      // returning to portrait. Re-asserted on every rotation via __sbApplyInset.
+      'html{-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important;}'+
+      'body{-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important;}'+
       'html,body{overscroll-behavior:none!important;overscroll-behavior-y:none!important;}';
     var tag = document.getElementById('sb-inset-style');
     if (!tag){ tag = document.createElement('style'); tag.id='sb-inset-style'; document.head.appendChild(tag); }
@@ -290,6 +323,7 @@ class _StreamPortalState extends State<StreamPortal>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.services.push.onPushTapUrl = null;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
@@ -308,6 +342,10 @@ class _StreamPortalState extends State<StreamPortal>
       },
       child: Scaffold(
         backgroundColor: Colors.black,
+        // Do NOT resize the WebView container when the keyboard appears — the
+        // page handles the keyboard via visualViewport. Letting Flutter resize
+        // it (default true) fights the site and makes content jitter up/down.
+        resizeToAvoidBottomInset: false,
         body: _viewportReady
             ? Padding(
                 padding: EdgeInsets.only(

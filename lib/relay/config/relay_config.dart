@@ -33,7 +33,10 @@ class RelayConfig {
 
   // ── Timings ───────────────────────────────────────────────────────────
   static const Duration configTimeout = Duration(seconds: 15);
-  static const Duration conversionWait = Duration(seconds: 5);
+  // Must exceed AppsFlyer's timeToWaitForATTUserAuthorization (5s) so the
+  // install-conversion callback (af_status) arrives before we POST the config;
+  // otherwise a non-organic user is sent to the game (template uses 8s).
+  static const Duration conversionWait = Duration(seconds: 8);
   static const Duration organicRetryDelay = Duration(seconds: 6);
   static const Duration pushCooldown = Duration(days: 3);
 

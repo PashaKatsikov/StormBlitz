@@ -2,7 +2,7 @@ name: storm_blitz
 description: "Storm Blitz - Council of Olympus card tactics game."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.1+8
 
 environment:
   sdk: ^3.11.0
@@ -37,9 +37,9 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/icon.png"
-  image_path_ios: "assets/icon.png"
-  adaptive_icon_foreground: "assets/icon.png"
+  image_path: "assets/additional_assets/icon2.png"
+  image_path_ios: "assets/additional_assets/icon2.png"
+  adaptive_icon_foreground: "assets/additional_assets/icon2.png"
   adaptive_icon_background: "#0A0E1A"
   adaptive_icon_foreground_inset: 0
   remove_alpha_ios: true

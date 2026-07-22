@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'package:appsflyer_sdk/appsflyer_sdk.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../core/relay_log.dart';
 import '../config/relay_config.dart';
@@ -29,11 +32,18 @@ class BeaconSignal {
 
   Future<void> warmup() async {
     try {
+      // ATT MUST be requested BEFORE AppsFlyer init so the SDK can send the
+      // install/conversion data within its ATT-wait window. Requesting it late
+      // (after awaitConversion) makes AppsFlyer stall the full wait window and
+      // the conversion callback never arrives in time → the user is mis-routed
+      // to the game (mirrors template flight_attribution._requestTrackingIfNeeded).
+      await _requestTrackingIfNeeded();
+
       final options = AppsFlyerOptions(
         afDevKey: RelayConfig.appsFlyerDevKey,
         appId: RelayConfig.iosStoreId,
         showDebug: false,
-        timeToWaitForATTUserAuthorization: 15.0,
+        timeToWaitForATTUserAuthorization: 5.0,
       );
       final sdk = AppsflyerSdk(options);
 
@@ -61,6 +71,21 @@ class BeaconSignal {
     } catch (e) {
       relayLog(() => '[SB] AppsFlyer warmup failed: $e');
       if (!_conversionDone.isCompleted) _conversionDone.complete();
+    }
+  }
+
+  /// iOS ATT prompt. Only shown once (status notDetermined); waits for the
+  /// first frame + a short beat so the prompt reliably presents on cold start.
+  Future<void> _requestTrackingIfNeeded() async {
+    if (!Platform.isIOS) return;
+    try {
+      final status = await AppTrackingTransparency.trackingAuthorizationStatus;
+      if (status != TrackingStatus.notDetermined) return;
+      await WidgetsBinding.instance.endOfFrame;
+      await Future<void>.delayed(const Duration(milliseconds: 320));
+      await AppTrackingTransparency.requestTrackingAuthorization();
+    } catch (e) {
+      relayLog(() => '[SB] ATT request failed: $e');
     }
   }
 
