@@ -1,0 +1,4 @@
+# Keep the Xcode project file byte-exact across Windows/macOS: no CRLF↔LF
+# rewriting and no UTF-8 BOM, which break `pod install` on macOS.
+*.pbxproj binary
+*.plist binary

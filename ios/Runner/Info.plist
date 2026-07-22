@@ -66,5 +66,24 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<true/>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>Your data is used to personalize your Storm Blitz experience and offers.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Storm Blitz uses the camera so you can share your best battles.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Storm Blitz needs photo access so you can add images to your profile.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+	</dict>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

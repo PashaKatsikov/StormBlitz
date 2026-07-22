@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/player_profile.dart';
+import '../relay/config/relay_config.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_scaffold.dart';
 import '../widgets/app_transitions.dart';
@@ -10,9 +11,9 @@ import 'web_view_screen.dart';
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
-  static const String privacyUrl =
-      'https://storrmblitz.com/privacy-policy.html';
-  static const String supportUrl = 'https://storrmblitz.com/support.html';
+  // Single source of truth — same URLs registered in App Store Connect.
+  static String get privacyUrl => RelayConfig.privacyUrl;
+  static String get supportUrl => RelayConfig.supportUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +32,7 @@ class SettingsScreen extends StatelessWidget {
             label: 'Privacy Policy',
             onTap: () => Navigator.of(context).push(
               AppTransitions.slideUp(
-                const WebViewScreen(title: 'Privacy Policy', url: privacyUrl),
+                WebViewScreen(title: 'Privacy Policy', url: privacyUrl),
               ),
             ),
           ),
@@ -43,7 +44,7 @@ class SettingsScreen extends StatelessWidget {
             label: 'Support',
             onTap: () => Navigator.of(context).push(
               AppTransitions.slideUp(
-                const WebViewScreen(title: 'Support', url: supportUrl),
+                WebViewScreen(title: 'Support', url: supportUrl),
               ),
             ),
           ),

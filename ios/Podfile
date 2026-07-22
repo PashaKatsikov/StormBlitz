@@ -36,6 +36,15 @@ target 'Runner' do
   end
 end
 
+# Notification Service Extension — pinned to the SAME Firebase version that
+# firebase_core resolves (12.15.0) so CocoaPods cannot pull a newer SDK that
+# needs a higher deployment target than the Runner side.
+target 'NotificationService' do
+  use_frameworks!
+  platform :ios, '15.0'
+  pod 'Firebase/Messaging', '12.15.0'
+end
+
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
