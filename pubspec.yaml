@@ -2,7 +2,7 @@ name: storm_blitz
 description: "Storm Blitz - Council of Olympus card tactics game."
 publish_to: 'none'
 
-version: 1.0.1+8
+version: 1.0.1+9
 
 environment:
   sdk: ^3.11.0
