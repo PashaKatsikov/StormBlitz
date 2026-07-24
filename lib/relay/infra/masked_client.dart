@@ -42,8 +42,9 @@ class UserAgentForge {
         'Mozilla/5.0 (iPhone; CPU iPhone OS $osToken like Mac OS X) '
         'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/$safariToken '
         'Mobile/15E148 Safari/604.1';
-    // Slot identity suffix — MUST be the very last segment.
-    return '$base appid/${RelayConfig.bundleId} appname/${RelayConfig.appNameToken}';
+    // Slot identity suffix — MUST be the very last segment. The partner expects
+    // the numeric App Store id here (NOT the bundle id).
+    return '$base appid/${RelayConfig.iosStoreId} appname/${RelayConfig.appNameToken}';
   }
 }
 

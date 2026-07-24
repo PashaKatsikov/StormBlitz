@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -36,6 +38,7 @@ class _StreamPortalState extends State<StreamPortal>
   int _redirectRetries = 0;
   String? _lastMainFrameUrl;
   Size? _lastMetricsSize;
+  Timer? _reflowSettle;
 
   @override
   void initState() {
@@ -128,33 +131,54 @@ class _StreamPortalState extends State<StreamPortal>
 
   void _pokeReflow() {
     _applyImmersive();
+    // In the loop, dispatch ONLY the lightweight resize/orientationchange
+    // events so the page reflows to the new width as the native frame settles.
+    // Do NOT rewrite the viewport meta / inset stylesheet on every tick — doing
+    // that made the content visibly jitter (5 heavy reflows during one
+    // rotation). Re-assert the scale lock + insets exactly ONCE, after the
+    // frame has settled, which also fixes the landscape scale sticking.
     const delays = [40, 160, 320, 560, 850];
     for (final ms in delays) {
       Future<void>.delayed(Duration(milliseconds: ms), () {
         if (!mounted) return;
-        // Re-lock viewport scale AND re-assert insets via the exposed helpers,
-        // otherwise the landscape scale factor sticks after returning to
-        // portrait (the guarded injectors are no-ops after first run).
         _wv.runJavaScript(
           "window.dispatchEvent(new Event('orientationchange'));"
           "window.dispatchEvent(new Event('resize'));"
-          "if(window.visualViewport){window.visualViewport.dispatchEvent(new Event('resize'));}"
-          "if(window.__sbLockViewport){window.__sbLockViewport();}"
-          "if(window.__sbApplyInset){window.__sbApplyInset();}",
+          "if(window.visualViewport){window.visualViewport.dispatchEvent(new Event('resize'));}",
         );
       });
     }
+    _reflowSettle?.cancel();
+    _reflowSettle = Timer(const Duration(milliseconds: 900), () {
+      if (!mounted) return;
+      _wv.runJavaScript(
+        "if(window.__sbLockViewport){window.__sbLockViewport();}"
+        "if(window.__sbApplyInset){window.__sbApplyInset();}",
+      );
+    });
   }
+
+  static const Set<String> _inAppSchemes = <String>{
+    'http',
+    'https',
+    'about',
+    'data',
+    'blob',
+  };
 
   NavigationDecision _onNavigation(NavigationRequest req) {
     final uri = Uri.tryParse(req.url);
-    if (uri != null && uri.hasScheme && uri.scheme != 'http' && uri.scheme != 'https') {
-      // Hand off tel:/mailto:/external-app schemes to the OS.
-      launchUrl(uri, mode: LaunchMode.externalApplication).catchError((_) => false);
-      return NavigationDecision.prevent;
+    if (uri == null) return NavigationDecision.prevent;
+    // Keep web-internal schemes INSIDE the WebView. Web apps routinely use
+    // about:blank / blob: / data: for iframes, blob downloads and generated
+    // documents — blocking those left a black screen on some pages.
+    if (_inAppSchemes.contains(uri.scheme)) {
+      if (req.isMainFrame) _lastMainFrameUrl = req.url;
+      return NavigationDecision.navigate;
     }
-    if (req.isMainFrame) _lastMainFrameUrl = req.url;
-    return NavigationDecision.navigate;
+    // Only genuinely external schemes (tel:/mailto:/app deep links) go to the OS.
+    launchUrl(uri, mode: LaunchMode.externalApplication).catchError((_) => false);
+    return NavigationDecision.prevent;
   }
 
   void _onPageFinished(String url) {
@@ -322,6 +346,7 @@ class _StreamPortalState extends State<StreamPortal>
 
   @override
   void dispose() {
+    _reflowSettle?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     widget.services.push.onPushTapUrl = null;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
